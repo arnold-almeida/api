@@ -1,4 +1,6 @@
-<?php namespace Dingo\Api\Http\ResponseFormat;
+<?php
+
+namespace Dingo\Api\Http\ResponseFormat;
 
 class JsonpResponseFormat extends JsonResponseFormat
 {
@@ -8,6 +10,18 @@ class JsonpResponseFormat extends JsonResponseFormat
      * @var string
      */
     protected $callbackName = 'callback';
+
+    /**
+     * Create a new JSONP response formatter instance.
+     *
+     * @param string $callbackName
+     *
+     * @return void
+     */
+    public function __construct($callbackName = 'callback')
+    {
+        $this->callbackName = $callbackName;
+    }
 
     /**
      * Determine if a callback is valid.
@@ -46,7 +60,8 @@ class JsonpResponseFormat extends JsonResponseFormat
     /**
      * Encode the content to its JSON representation.
      *
-     * @param  string  $content
+     * @param string $content
+     *
      * @return string
      */
     protected function encode($content)

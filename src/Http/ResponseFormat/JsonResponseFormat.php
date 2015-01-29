@@ -9,12 +9,17 @@ class JsonResponseFormat extends ResponseFormat
     /**
      * Format an Eloquent model.
      *
-     * @param  \Illuminate\Database\Eloquent\Model  $model
+     * @param \Illuminate\Database\Eloquent\Model $model
+     *
      * @return string
      */
     public function formatEloquentModel($model)
     {
         $key = str_singular($model->getTable());
+
+        if (! $model::$snakeAttributes) {
+            $key = camel_case($key);
+        }
 
         return $this->encode([$key => $model->toArray()]);
     }
@@ -22,7 +27,8 @@ class JsonResponseFormat extends ResponseFormat
     /**
      * Format an Eloquent collection.
      *
-     * @param  \Illuminate\Database\Eloquent\Collection  $collection
+     * @param \Illuminate\Database\Eloquent\Collection $collection
+     *
      * @return string
      */
     public function formatEloquentCollection($collection)
@@ -31,26 +37,21 @@ class JsonResponseFormat extends ResponseFormat
             return $this->encode([]);
         }
 
-        $key = str_plural($collection->first()->getTable());
+        $model = $collection->first();
+        $key = str_plural($model->getTable());
+
+        if (! $model::$snakeAttributes) {
+            $key = camel_case($key);
+        }
 
         return $this->encode([$key => $collection->toArray()]);
     }
 
     /**
-     * Format other response type such as a string or integer.
-     *
-     * @param  string  $content
-     * @return string
-     */
-    public function formatOther($content)
-    {
-        return $content;
-    }
-
-    /**
      * Format an array or instance implementing ArrayableInterface.
      *
-     * @param  array|\Illuminate\Support\Contracts\ArrayableInterface  $content
+     * @param array|\Illuminate\Support\Contracts\ArrayableInterface $content
+     *
      * @return string
      */
     public function formatArray($content)
@@ -77,7 +78,8 @@ class JsonResponseFormat extends ResponseFormat
     /**
      * Morph a value to an array.
      *
-     * @param  array|\Illuminate\Support\Contracts\ArrayableInterface  $value
+     * @param array|\Illuminate\Support\Contracts\ArrayableInterface $value
+     *
      * @return array
      */
     protected function morphToArray($value)
@@ -88,7 +90,8 @@ class JsonResponseFormat extends ResponseFormat
     /**
      * Encode the content to its JSON representation.
      *
-     * @param  string  $content
+     * @param string $content
+     *
      * @return string
      */
     protected function encode($content)

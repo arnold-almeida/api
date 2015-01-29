@@ -3,7 +3,7 @@
 namespace Dingo\Api\Auth;
 
 use Illuminate\Http\Request;
-use Illuminate\Routing\Route;
+use Dingo\Api\Routing\Route;
 use Illuminate\Auth\AuthManager;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 
@@ -24,10 +24,11 @@ class BasicProvider extends AuthorizationProvider
     protected $identifier;
 
     /**
-     * Create a new Dingo\Api\Auth\BasicProvider instance.
+     * Create a new basic provider instance.
      *
-     * @param  \Illuminate\Auth\AuthManager  $auth
-     * @param  string  $identifier
+     * @param \Illuminate\Auth\AuthManager $auth
+     * @param string                       $identifier
+     *
      * @return void
      */
     public function __construct(AuthManager $auth, $identifier = 'email')
@@ -39,15 +40,16 @@ class BasicProvider extends AuthorizationProvider
     /**
      * Authenticate request with Basic.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Illuminate\Routing\Route  $route
+     * @param \Illuminate\Http\Request  $request
+     * @param \Illuminate\Routing\Route $route
+     *
      * @return mixed
      */
     public function authenticate(Request $request, Route $route)
     {
         $this->validateAuthorizationHeader($request);
 
-        if ($response = $this->auth->onceBasic($this->identifier) and $response->getStatusCode() === 401) {
+        if (($response = $this->auth->onceBasic($this->identifier, $request)) && $response->getStatusCode() === 401) {
             throw new UnauthorizedHttpException('Basic', 'Invalid authentication credentials.');
         }
 
