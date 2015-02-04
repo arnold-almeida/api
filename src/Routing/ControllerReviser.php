@@ -2,7 +2,7 @@
 
 namespace Dingo\Api\Routing;
 
-use Illuminate\Routing\Route;
+use BadMethodCallException;
 use Illuminate\Container\Container;
 
 class ControllerReviser
@@ -17,7 +17,9 @@ class ControllerReviser
     /**
      * Create a new controller reviser instance.
      *
-     * @param \Illuminate\Container\Container  $container
+     * @param \Illuminate\Container\Container $container
+     *
+     * @return void
      */
     public function __construct(Container $container = null)
     {
@@ -27,23 +29,22 @@ class ControllerReviser
     /**
      * Revise a controller route by updating the protection and scopes.
      *
-     * @param  \Illuminate\Routing\Route  $route
-     * @return \Illuminate\Routing\Route
+     * @param \Dingo\Api\Routing\Route $route
+     *
+     * @return \Dingo\Api\Routing\Route
      */
     public function revise(Route $route)
     {
         if ($this->routingToController($route)) {
-            list ($class, $method) = explode('@', $route->getActionName());
+            list($class, $method) = explode('@', $route->getActionName());
 
             $controller = $this->resolveController($class);
 
-            if ($controller instanceof Controller) {
-                $action = $route->getAction();
-
-                $action = $this->reviseProtectedMethods($action, $controller, $method);
-                $action = $this->reviseScopedMethods($action, $controller, $method);
-
-                $route->setAction($action);
+            try {
+                $this->reviseProtection($route, $controller, $method);
+                $this->reviseScopes($route, $controller, $method);
+            } catch (BadMethodCallException $exception) {
+                // This controller does not utilize the trait.
             }
         }
 
@@ -53,7 +54,8 @@ class ControllerReviser
     /**
      * Determine if the route is routing to a controller.
      *
-     * @param  \Illuminate\Routing\Route  $route
+     * @param \Dingo\Api\Routing\Route $route
+     *
      * @return bool
      */
     protected function routingToController(Route $route)
@@ -62,58 +64,56 @@ class ControllerReviser
     }
 
     /**
-     * Revise the scopes of a controller method. Scopes defined on the
-     * controller are merged with those in the route definition.
+     * Revise the scopes of a controller method.
      *
-     * @param  \Illuminate\Routing\Route  $action
-     * @param  \Dingo\Api\Routing\Controller  $controller
-     * @param  string  $method
-     * @return \Illuminate\Routing\Route
+     * Scopes defined on the controller are merged with those in the route definition.
+     *
+     * @param \Dingo\Api\Routing\Route       $action
+     * @param \Illuminate\Routing\Controller $controller
+     * @param string                         $method
+     *
+     * @return void
      */
-    protected function reviseScopedMethods($action, $controller, $method)
+    protected function reviseScopes(Route $route, $controller, $method)
     {
-        if (! isset($action['scopes'])) {
-            $action['scopes'] = [];
+        $properties = $controller->getProperties();
+
+        if (isset($properties['*']['scopes'])) {
+            $route->addScopes($properties['*']['scopes']);
         }
 
-        $action['scopes'] = (array) $action['scopes'];
-
-        $scopedMethods = $controller->getScopedMethods();
-
-        if (isset($scopedMethods['*'])) {
-            $action['scopes'] = array_merge($action['scopes'], $scopedMethods['*']);
+        if (isset($properties[$method]['scopes'])) {
+            $route->addScopes($properties[$method]['scopes']);
         }
-
-        if (isset($scopedMethods[$method])) {
-            $action['scopes'] = array_merge($action['scopes'], $scopedMethods[$method]);
-        }
-
-        return $action;
     }
 
     /**
      * Revise the protected state of a controller method.
      *
-     * @param  \Illuminate\Routing\Route  $action
-     * @param  \Dingo\Api\Routing\Controller  $controller
-     * @param  string  $method
-     * @return \Illuminate\Routing\Route
+     * @param \Dingo\Api\Routing\Route       $action
+     * @param \Illuminate\Routing\Controller $controller
+     * @param string                         $method
+     *
+     * @return void
      */
-    protected function reviseProtectedMethods($action, $controller, $method)
+    protected function reviseProtection(Route $route, $controller, $method)
     {
-        if (in_array($method, $controller->getProtectedMethods())) {
-            $action['protected'] = true;
-        } elseif (in_array($method, $controller->getUnprotectedMethods())) {
-            $action['protected'] = false;
+        $properties = $controller->getProperties();
+
+        if (isset($properties['*']['protected'])) {
+            $route->setProtected($properties['*']['protected']);
         }
 
-        return $action;
+        if (isset($properties[$method]['protected'])) {
+            $route->setProtected($properties[$method]['protected']);
+        }
     }
 
     /**
      * Resolve a controller from the container.
      *
-     * @param  string  $class
+     * @param string $class
+     *
      * @return \Illuminate\Routing\Controller
      */
     protected function resolveController($class)
@@ -124,6 +124,6 @@ class ControllerReviser
             $this->container->instance($class, $controller);
         }
 
-        return $this->resolvedControllers[$class] = $controller;
+        return $controller;
     }
 }

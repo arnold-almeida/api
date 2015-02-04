@@ -67,6 +67,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Strict Mode
+    |--------------------------------------------------------------------------
+    |
+    | Enabling strict mode will require clients to send a valid Accept header
+    | with every request. This also voids the default API version, meaning
+    | your API will not be browsable via a web browser.
+    |
+    */
+
+    'strict' => false,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Debug Mode
+    |--------------------------------------------------------------------------
+    |
+    | Enabling debug mode will result in error responses caused by thrown
+    | exceptions to have a "debug" key that will be populated with
+    | more detailed information on the exception.
+    |
+    */
+
+    'debug' => false,
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication Providers
     |--------------------------------------------------------------------------
     |
@@ -78,38 +104,21 @@ return [
     'auth' => [
         'basic' => function ($app) {
             return new Dingo\Api\Auth\BasicProvider($app['auth']);
-        }
+        },
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Rate Limiting
+    | Throttling / Rate Limiting
     |--------------------------------------------------------------------------
     |
     | Consumers of your API can be limited to the amount of requests they can
-    | make. You can configure the limit based on whether the consumer is
-    | authenticated or unauthenticated.
-    |
-    | The "limit" is the number of requests the consumer can make within a
-    | certain amount time which is defined by "reset" in minutes.
-    |
-    | By default rate limiting is disabled.
+    | make. You can create your own throttles or simply change the default
+    | throttles.
     |
     */
 
-    'rate_limiting' => [
-
-        'authenticated' => [
-            'limit' => 0,
-            'reset' => 60
-        ],
-
-        'unauthenticated' => [
-            'limit' => 0,
-            'reset' => 60
-        ],
-
-        'exceeded' => 'API rate limit has been exceeded.'
+    'throttling' => [
 
     ],
 
@@ -125,11 +134,7 @@ return [
     |
     */
 
-    'transformer' => function ($app) {
-        $fractal = new League\Fractal\Manager;
-
-        return new Dingo\Api\Transformer\FractalTransformer($fractal);
-    },
+    'transformer' => 'Dingo\Api\Transformer\FractalTransformer',
 
     /*
     |--------------------------------------------------------------------------
@@ -146,7 +151,7 @@ return [
 
     'formats' => [
 
-        'json' => new Dingo\Api\Http\ResponseFormat\JsonResponseFormat
+        'json' => 'Dingo\Api\Http\ResponseFormat\JsonResponseFormat',
 
     ]
 

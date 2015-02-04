@@ -2,23 +2,24 @@
 
 namespace Dingo\Api\Http;
 
-use Dingo\Api\Transformer\FractalTransformer;
-use League\Fractal\Resource\Item as FractalItem;
-use League\Fractal\Serializer\SerializerAbstract;
-use Illuminate\Http\Response as IlluminateResponse;
-use League\Fractal\Resource\Collection as FractalCollection;
-use League\Fractal\Pagination\CursorInterface as FractalCursorInterface;
-use League\Fractal\Resource\ResourceInterface as FractalResourceInterface;
-use League\Fractal\Pagination\PaginatorInterface as FractalPaginatorInterface;
+use Dingo\Api\Transformer\Binding;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class ResponseBuilder
 {
     /**
-     * Fractral transformer instance.
+     * Transformer binding instance.
      *
-     * @var \Dingo\Api\Transformer\FractalTransformer
+     * @var \Dingo\Api\Transformer\Binding
      */
-    protected $fractal;
+    protected $binding;
+
+    /**
+     * Response content.
+     *
+     * @var mixed
+     */
+    protected $response;
 
     /**
      * The HTTP response headers.
@@ -28,6 +29,13 @@ class ResponseBuilder
     protected $headers = [];
 
     /**
+     * The HTTP response cookies.
+     *
+     * @var array
+     */
+    protected $cookies = [];
+
+    /**
      * The HTTP response status code.
      *
      * @var int
@@ -35,130 +43,40 @@ class ResponseBuilder
     protected $statusCode = 200;
 
     /**
-     * The Fractal serializer.
-     *
-     * @var \League\Fractal\Serializer\SerializerAbstract
-     */
-    protected $serializer;
-
-    /**
-     * Array of meta data.
-     *
-     * @var array
-     */
-    protected $meta = [];
-
-    /**
      * Create a new response builder instance.
      *
-     * @param  \Dingo\Api\Transformer\FractalTransformer  $fractal
+     * @param mixed                          $response
+     * @param \Dingo\Api\Transformer\Binding $binding
+     *
      * @return void
      */
-    public function __construct(FractalTransformer $fractal)
+    public function __construct($response, Binding $binding = null)
     {
-        $this->fractal = $fractal;
+        $this->response = $response;
+        $this->binding = $binding;
     }
 
     /**
-     * Create a new collection resource with the given tranformer.
+     * Add a meta key and value pair.
      *
-     * @param  array|object  $collection
-     * @param  object  $transformer
-     * @param  \League\Fractal\Pagination\CursorInterface  $cursor
-     * @param  string  $key
-     * @return \Illuminate\Http\Response
-     */
-    public function withCollection($collection, $transformer, FractalCursorInterface $cursor = null, $key = null)
-    {
-        $resource = new FractalCollection($collection, $transformer, $key);
-
-        if (! is_null($cursor)) {
-            $resource->setCursor($cursor);
-        }
-
-        return $this->build($resource);
-    }
-
-    /**
-     * Create a new item resource with the given transformer.
+     * @param string $key
+     * @param mixed  $value
      *
-     * @param  array|object  $item
-     * @param  object  $transformer
-     * @param  string  $key
-     * @return \Illuminate\Http\Response
-     */
-    public function withItem($item, $transformer, $key = null)
-    {
-        $resource = new FractalItem($item, $transformer, $key);
-
-        return $this->build($resource);
-    }
-
-    /**
-     * Create a new collection resource from a paginator with the given transformer.
-     *
-     * @param  \League\Fractal\Pagination\PaginatorInterface  $paginator
-     * @param  object  $transformer
-     * @param  string  $key
-     * @return \Illuminate\Http\Response
-     */
-    public function withPaginator(FractalPaginatorInterface $paginator, $transformer, $key = null)
-    {
-        $resource = new FractalCollection($paginator->getCollection(), $transformer, $key);
-
-        $resource->setPaginator($paginator);
-
-        return $this->build($resource);
-    }
-
-    /**
-     * Return an array response.
-     *
-     * @param  array  $array
-     * @return \Illuminate\Http\Response
-     */
-    public function withArray(array $array)
-    {
-        return $this->build($array);
-    }
-
-    /**
-     * Return an error response.
-     *
-     * @param  string|array  $error
-     * @param  int  $statusCode
-     * @return \Illuminate\Http\Response
-     */
-    public function withError($error, $statusCode)
-    {
-        if (! is_array($error)) {
-            $error = ['error' => $error];
-        }
-
-        $error = array_merge(['status_code'  => $statusCode], $error);
-
-        return $this->setStatusCode($statusCode)->withArray($error);
-    }
-
-    /**
-     * Add a Fractal meta key and value pair.
-     *
-     * @param  string  $key
-     * @param  mixed  $value
      * @return \Dingo\Api\Http\ResponseBuilder
      */
     public function addMeta($key, $value)
     {
-        $this->meta[$key] = $value;
+        $this->binding->addMeta($key, $value);
 
         return $this;
     }
 
     /**
-     * Add a Fractal meta key and value pair.
+     * Add a meta key and value pair.
      *
-     * @param  string  $key
-     * @param  mixed  $value
+     * @param string $key
+     * @param mixed  $value
+     *
      * @return \Dingo\Api\Http\ResponseBuilder
      */
     public function meta($key, $value)
@@ -167,55 +85,54 @@ class ResponseBuilder
     }
 
     /**
-     * Build the response.
+     * Set the meta data for the response.
      *
-     * @param  array|\League\Fractal\Resource\ResourceInterface  $data
-     * @return \Illuminate\Http\Response
-     */
-    protected function build($data)
-    {
-        if ($data instanceof FractalResourceInterface) {
-            $fractal = $this->resolveFractal();
-
-            foreach ($this->meta as $key => $value) {
-                $data->setMetaValue($key, $value);
-            }
-
-            if ($this->serializer) {
-                $fractal->setSerializer($this->serializer);
-            }
-
-            $data = $this->resolveFractal()->createData($data)->toArray();
-        }
-
-        $response = new IlluminateResponse($data, $this->statusCode, $this->headers);
-
-        $this->reset();
-
-        return $response;
-    }
-
-    /**
-     * Reset this response builder instance.
+     * @param array $meta
      *
-     * @return void
-     */
-    protected function reset()
-    {
-        $this->serializer = null;
-        $this->statusCode = 200;
-        $this->headers = [];
-        $this->meta = [];
-    }
-
-    /**
-     * Add a header to the response
-     *
-     * @param  string  $name
-     * @param  string  $value
      * @return \Dingo\Api\Http\ResponseBuilder
      */
-    public function addHeader($name, $value)
+    public function setMeta(array $meta)
+    {
+        $this->binding->setMeta($meta);
+
+        return $this;
+    }
+
+    /**
+     * Add a cookie to the response.
+     *
+     * @param \Symfony\Component\HttpFoundation\Cookie $cookie
+     *
+     * @return \Dingo\Api\Http\ResponseBuilder
+     */
+    public function withCookie(Cookie $cookie)
+    {
+        $this->cookies[] = $cookie;
+
+        return $this;
+    }
+
+    /**
+     * Add a cookie to the response.
+     *
+     * @param \Symfony\Component\HttpFoundation\Cookie $cookie
+     *
+     * @return \Dingo\Api\Http\ResponseBuilder
+     */
+    public function cookie(Cookie $cookie)
+    {
+        return $this->withCookie($cookie);
+    }
+
+    /**
+     * Add a header to the response.
+     *
+     * @param string $name
+     * @param string $value
+     *
+     * @return \Dingo\Api\Http\ResponseBuilder
+     */
+    public function withHeader($name, $value)
     {
         $this->headers[$name] = $value;
 
@@ -223,45 +140,23 @@ class ResponseBuilder
     }
 
     /**
-     * Add an array of headers.
-     *
-     * @param  array  $headers
-     * @return \Dingo\Api\Http\ResponseBuilder
-     */
-    public function addHeaders(array $headers)
-    {
-        $this->headers = array_merge($this->headers, $headers);
-
-        return $this;
-    }
-
-    /**
      * Add a header to the response.
      *
-     * @param  string  $name
-     * @param  string  $value
+     * @param string $name
+     * @param string $value
+     *
      * @return \Dingo\Api\Http\ResponseBuilder
      */
     public function header($name, $value)
     {
-        return $this->addHeader($name, $value);
-    }
-
-    /**
-     * Add an array of headers.
-     *
-     * @param  array  $headers
-     * @return \Dingo\Api\Http\ResponseBuilder
-     */
-    public function headers(array $headers)
-    {
-        return $this->addHeaders($headers);
+        return $this->withHeader($name, $value);
     }
 
     /**
      * Set the responses status code.
      *
-     * @param  int  $statusCode
+     * @param int $statusCode
+     *
      * @return \Dingo\Api\Http\ResponseBuilder
      */
     public function setStatusCode($statusCode)
@@ -272,93 +167,32 @@ class ResponseBuilder
     }
 
     /**
-     * Return a 404 not found error.
+     * Set the response status code.
      *
-     * @param  string|array  $message
-     * @return \Illuminate\Http\Response
-     */
-    public function errorNotFound($message = 'Not Found')
-    {
-        return $this->withError($message, 404);
-    }
-
-    /**
-     * Return a 400 bad request error.
+     * @param int $statusCode
      *
-     * @param  string|array  $message
-     * @return \Illuminate\Http\Response
-     */
-    public function errorBadRequest($message = 'Bad Request')
-    {
-        return $this->withError($message, 400);
-    }
-
-    /**
-     * Return a 403 forbidden error.
-     *
-     * @param  string|array  $message
-     * @return \Illuminate\Http\Response
-     */
-    public function errorForbidden($message = 'Forbidden')
-    {
-        return $this->withError($message, 403);
-    }
-
-    /**
-     * Return a 500 internal server error.
-     *
-     * @param  string|array  $message
-     * @return \Illuminate\Http\Response
-     */
-    public function errorInternal($message = 'Internal Error')
-    {
-        return $this->withError($message, 500);
-    }
-
-    /**
-     * Return a 401 unauthorized error.
-     *
-     * @param  string|array  $message
-     * @return \Illuminate\Http\Response
-     */
-    public function errorUnauthorized($message = 'Unauthorized')
-    {
-        return $this->withError($message, 401);
-    }
-
-    /**
-     * Set the Fractal serializer.
-     *
-     * @param  \League\Fractal\Serializer\SerializerAbstract  $serializer
      * @return \Dingo\Api\Http\ResponseBuilder
      */
-    public function setSerializer(SerializerAbstract $serializer)
+    public function statusCode($statusCode)
     {
-        $this->serializer = $serializer;
-
-        return $this;
+        return $this->setStatusCode($statusCode);
     }
 
     /**
-     * Set the Fractal serializer.
+     * Build the response.
      *
-     * @param  \League\Fractal\Serializer\SerializerAbstract  $serializer
-     * @return \Dingo\Api\Http\ResponseBuilder
+     * @return \Illuminate\Http\Response
      */
-    public function serializer(SerializerAbstract $serializer)
+    public function build()
     {
-        return $this->setSerializer($serializer);
-    }
+        $response = new Response($this->response, $this->statusCode, $this->headers);
 
-    /**
-     * Resolve the Fractal manager.
-     *
-     * @return \League\Fractal\Manager
-     */
-    protected function resolveFractal()
-    {
-        $this->fractal->parseFractalIncludes();
+        foreach ($this->cookies as $cookie) {
+            if ($cookie instanceof Cookie) {
+                $response->withCookie($cookie);
+            }
+        }
 
-        return $this->fractal->getFractal();
+        return $response;
     }
 }
